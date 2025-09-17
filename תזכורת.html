@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>אפליקציית תזכורות מקצועית</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Assistant&display=swap');
+
+body {
+    font-family: 'Assistant', sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f0f2f5;
+    direction: rtl;
+}
+header {
+    background: #2E71B3;
+    color: #fff;
+    padding: 15px;
+    text-align: center;
+    font-size: 1.5em;
+    position: relative;
+}
+.back-btn {
+    position: absolute;
+    left: 15px;
+    top: 15px;
+    background: #fff;
+    color: #2E71B3;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.3s, color 0.3s;
+}
+.back-btn:hover {
+    background: #2560a8;
+    color: #fff;
+}
+main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+form {
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 20px;
+}
+form input, form textarea, form select, form button {
+    width: 100%;
+    padding: 10px;
+    margin-top: 10px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+}
+form button {
+    background: #2E71B3;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+form button:hover {
+    background: #2560a8;
+}
+.controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    width: 100%;
+    max-width: 600px;
+}
+.controls input, .controls select {
+    flex: 1;
+    padding: 8px;
+}
+.reminders {
+    width: 100%;
+    max-width: 800px;
+}
+.reminder {
+    padding: 15px;
+    margin-bottom: 10px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+    transition: transform 0.3s, background 0.3s;
+}
+.reminder.completed {
+    opacity: 0.6;
+    text-decoration: line-through;
+}
+.reminder .actions {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    gap: 5px;
+}
+.reminder .actions button {
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    color: #fff;
+}
+.reminder .actions .delete { background: #ff4d4d; }
+.reminder .actions .edit { background: #56CFE1; }
+.reminder .actions .complete { background: #4CAF50; }
+.reminder .actions .payment { background: #FFA500; }
+
+/* Popup */
+.popup {
+    position: fixed;
+    bottom: -200px;
+    right: 20px;
+    background: #2E71B3;
+    color: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    min-width: 250px;
+    transition: bottom 0.5s ease-in-out, background 0.3s;
+    z-index: 1000;
+}
+.popup.show {
+    bottom: 20px;
+}
+.popup button {
+    margin-top: 10px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    background: #fff;
+    color: #2E71B3;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<header>
+    אפליקציית תזכורות מקצועית
+    <button class="back-btn" onclick="goBack()">⬅ חזור ללקוחות</button>
+</header>
+
+<main>
+
+<form id="reminderForm">
+    <input type="text" id="clientName" placeholder="שם לקוח" required>
+    <input type="date" id="reminderDate" required>
+    <input type="time" id="reminderTime" required>
+    <textarea id="reminderNote" placeholder="הערה"></textarea>
+    <select id="reminderStatus">
+        <option value="פעיל">פעיל</option>
+        <option value="לא פעיל">לא פעיל</option>
+    </select>
+    <select id="reminderPayment">
+        <option value="לא שולם">לא שולם</option>
+        <option value="שולם">שולם</option>
+    </select>
+    <button type="submit">שמור תזכורת</button>
+</form>
+
+<div class="controls">
+    <input type="text" id="searchName" placeholder="חיפוש לפי שם לקוח">
+    <select id="filterStatus">
+        <option value="all">כל התזכורות</option>
+        <option value="פעיל">פעיל</option>
+        <option value="לא פעיל">לא פעיל</option>
+        <option value="completed">הושלם</option>
+    </select>
+</div>
+
+<div class="reminders" id="remindersList"></div>
+
+</main>
+
+<div class="popup" id="popup">
+  <div id="popupContent"></div>
+  <button id="closePopup">סגור</button>
+</div>
+
+<audio id="alertSound">
+  <source src="https://www.soundjay.com/buttons/sounds/beep-07.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+const form = document.getElementById('reminderForm');
+const remindersList = document.getElementById('remindersList');
+const popup = document.getElementById('popup');
+const popupContent = document.getElementById('popupContent');
+const closePopup = document.getElementById('closePopup');
+const alertSound = document.getElementById('alertSound');
+const searchName = document.getElementById('searchName');
+const filterStatus = document.getElementById('filterStatus');
+
+let reminders = JSON.parse(localStorage.getItem('reminders')) || [];
+
+// חזרה ללקוחות
+function goBack() {
+    window.location.href = "file:///C:/Users/Admin/OneDrive/%D7%A9%D7%95%D7%9C%D7%97%D7%9F%20%D7%94%D7%A2%D7%91%D7%95%D7%93%D7%94/lekohot.html#"; // שנה לכתובת של עמוד הלקוחות שלך
+}
+
+let popupTimeout;
+
+// שמירה ב-localStorage
+function saveReminders() {
+    localStorage.setItem('reminders', JSON.stringify(reminders));
+}
+
+// הוספה / עריכה
+form.addEventListener('submit', e => {
+    e.preventDefault();
+    const clientName = document.getElementById('clientName').value;
+    const date = document.getElementById('reminderDate').value;
+    const time = document.getElementById('reminderTime').value;
+    const note = document.getElementById('reminderNote').value;
+    const status = document.getElementById('reminderStatus').value;
+    const payment = document.getElementById('reminderPayment').value;
+
+    const id = Date.now();
+    reminders.push({id, clientName, date, time, note, status, payment, completed: false, alerted: false});
+    saveReminders();
+    form.reset();
+    renderReminders();
+});
+
+// יצירת HTML לכל התזכורות
+function renderReminders() {
+    const search = searchName.value.trim().toLowerCase();
+    const filter = filterStatus.value;
+
+    reminders.sort((a, b) => {
+        const dateTimeA = new Date(a.date + 'T' + a.time);
+        const dateTimeB = new Date(b.date + 'T' + b.time);
+        return dateTimeA - dateTimeB;
+    });
+
+    remindersList.innerHTML = '';
+    reminders.forEach(reminder => {
+        if((search && !reminder.clientName.toLowerCase().includes(search)) ||
+           (filter !== 'all' && 
+            (filter === 'completed' ? !reminder.completed : reminder.status !== filter))) {
+            return;
+        }
+
+        const div = document.createElement('div');
+        div.className = 'reminder' + (reminder.completed ? ' completed' : '');
+        div.style.background = reminder.payment === 'שולם' ? '#d4edda' : '#f8d7da';
+        div.innerHTML = `
+            <strong>${reminder.clientName}</strong> | ${reminder.date} ${reminder.time}<br>
+            ${reminder.note} | סטטוס: ${reminder.status} | תשלום: ${reminder.payment}
+            <div class="actions">
+                <button class="payment">${reminder.payment}</button>
+                <button class="complete">${reminder.completed ? 'בטל השלם' : 'סמן כהושלם'}</button>
+                <button class="edit">ערוך</button>
+                <button class="delete">מחק</button>
+            </div>
+        `;
+        remindersList.appendChild(div);
+
+        div.querySelector('.delete').addEventListener('click', () => {
+            if(confirm(`האם אתה בטוח שברצונך למחוק את התזכורת של ${reminder.clientName}?`)) {
+                reminders = reminders.filter(r => r.id !== reminder.id);
+                saveReminders();
+                renderReminders();
+            }
+        });
+        div.querySelector('.edit').addEventListener('click', () => {
+            document.getElementById('clientName').value = reminder.clientName;
+            document.getElementById('reminderDate').value = reminder.date;
+            document.getElementById('reminderTime').value = reminder.time;
+            document.getElementById('reminderNote').value = reminder.note;
+            document.getElementById('reminderStatus').value = reminder.status;
+            document.getElementById('reminderPayment').value = reminder.payment;
+            reminders = reminders.filter(r => r.id !== reminder.id);
+            saveReminders();
+            renderReminders();
+        });
+        div.querySelector('.complete').addEventListener('click', () => {
+            reminder.completed = !reminder.completed;
+            saveReminders();
+            renderReminders();
+        });
+        div.querySelector('.payment').addEventListener('click', () => {
+            reminder.payment = reminder.payment === 'שולם' ? 'לא שולם' : 'שולם';
+            saveReminders();
+            renderReminders();
+        });
+    });
+}
+
+renderReminders();
+
+searchName.addEventListener('input', renderReminders);
+filterStatus.addEventListener('change', renderReminders);
+
+setInterval(() => {
+    const now = new Date();
+    reminders.forEach(reminder => {
+        if(!reminder.completed && !reminder.alerted) {
+            const reminderDate = new Date(reminder.date + 'T' + reminder.time);
+            const diffMinutes = (reminderDate - now) / 60000;
+            if(reminderDate <= now) {
+                showPopup(reminder, diffMinutes <= 10);
+                reminder.alerted = true;
+                saveReminders();
+            }
+        }
+    });
+}, 5000);
+
+function showPopup(reminder, isUrgent = false) {
+    popup.style.background = isUrgent ? '#ff4d4d' : '#2E71B3';
+    popupContent.innerHTML = `
+        <strong>${reminder.clientName}</strong><br>
+        ${reminder.note}<br>
+        סטטוס: ${reminder.status}<br>
+        תשלום: ${reminder.payment}<br>
+        תאריך: ${reminder.date} ${reminder.time}
+    `;
+    popup.classList.add('show');
+    alertSound.play();
+}
+
+closePopup.addEventListener('click', () => {
+    popup.classList.remove('show');
+});
+</script>
+
+</body>
+</html>
